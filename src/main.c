@@ -33,7 +33,7 @@
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 static const struct device *const hci_uart_dev =
-	DEVICE_DT_GET(DT_CHOSEN(zephyr_bt_c2h_uart));
+	DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
 static K_THREAD_STACK_DEFINE(tx_thread_stack, CONFIG_BT_HCI_TX_STACK_SIZE);
 static struct k_thread tx_thread_data;
 static K_FIFO_DEFINE(tx_queue);
@@ -62,11 +62,22 @@ static K_FIFO_DEFINE(uart_tx_queue);
  */
 #define H4_DISCARD_LEN 33
 
+void print_debug(const char *fmt, ...)
+{
+	return;
+    va_list args;
+    va_start(args, fmt);
+
+    printk(fmt, args); // Use vprintf to print the formatted string
+
+    va_end(args);
+}
+
 static int h4_read(const struct device *uart, uint8_t *buf, size_t len)
 {
 	int rx = uart_fifo_read(uart, buf, len);
 
-	LOG_DBG("read %d req %d", rx, len);
+	print_debug("read %d req %d\n", rx, len);
 
 	return rx;
 }
@@ -88,7 +99,7 @@ static uint32_t get_len(const uint8_t *hdr_buf, uint8_t type)
 	case H4_ACL:
 		return sys_le16_to_cpu(((const struct bt_hci_acl_hdr *)hdr_buf)->len);
 	default:
-		LOG_ERR("Invalid type: %u", type);
+		print_debug("Invalid type: %u", type);
 		return 0;
 	}
 }
@@ -104,13 +115,14 @@ static int hdr_len(uint8_t type)
 	case H4_ACL:
 		return sizeof(struct bt_hci_acl_hdr);
 	default:
-		LOG_ERR("Invalid type: %u", type);
+		print_debug("Invalid type: %u", type);
 		return 0;
 	}
 }
 
 static void rx_isr(void)
 {
+	print_debug("RX callback started\n");
 	static struct net_buf *buf;
 	static int remaining;
 	static uint8_t state;
@@ -122,6 +134,7 @@ static void rx_isr(void)
 	do {
 		switch (state) {
 		case ST_IDLE:
+			print_debug("Reading in idle state\n");
 			/* Get packet type */
 			read = h4_read(hci_uart_dev, &type, sizeof(type));
 			/* since we read in loop until no data is in the fifo,
@@ -135,16 +148,18 @@ static void rx_isr(void)
 					remaining = hdr_len(type);
 					state = ST_HDR;
 				} else {
-					LOG_WRN("Unknown header %d", type);
+					print_debug("Unknown header %d\n", type);
 				}
 			}
 			break;
 		case ST_HDR:
+			print_debug("Reading in hdr state\n");
 			read = h4_read(hci_uart_dev,
 				       &hdr_buf[hdr_len(type) - remaining],
 				       remaining);
 			remaining -= read;
 			if (remaining == 0) {
+				print_debug("Reading header\n");
 				/* Header received. Allocate buffer and get
 				 * payload length. If allocation fails leave
 				 * interrupt. On failed allocation state machine
@@ -153,7 +168,7 @@ static void rx_isr(void)
 				buf = bt_buf_get_tx(BT_BUF_H4, K_NO_WAIT,
 						    &type, sizeof(type));
 				if (!buf) {
-					LOG_ERR("No available command buffers!");
+					print_debug("No available command buffers!\n");
 					state = ST_IDLE;
 					return;
 				}
@@ -162,7 +177,7 @@ static void rx_isr(void)
 
 				net_buf_add_mem(buf, hdr_buf, hdr_len(type));
 				if (remaining > net_buf_tailroom(buf)) {
-					LOG_ERR("Not enough space in buffer");
+					print_debug("Not enough space in buffer\n");
 					net_buf_unref(buf);
 					state = ST_DISCARD;
 				} else {
@@ -170,21 +185,24 @@ static void rx_isr(void)
 				}
 
 			}
+			print_debug("Finished hdr\n");
 			break;
 		case ST_PAYLOAD:
+			print_debug("Reading in payload state\n");
 			read = h4_read(hci_uart_dev, net_buf_tail(buf),
 				       remaining);
 			buf->len += read;
 			remaining -= read;
 			if (remaining == 0) {
 				/* Packet received */
-				LOG_DBG("putting RX packet in queue.");
+				print_debug("putting RX packet in queue.\n");
 				net_buf_put(&tx_queue, buf);
 				state = ST_IDLE;
 			}
 			break;
 		case ST_DISCARD:
 		{
+			print_debug("Reading in discard state\n");
 			uint8_t discard[H4_DISCARD_LEN];
 			size_t to_read = MIN(remaining, sizeof(discard));
 
@@ -198,6 +216,7 @@ static void rx_isr(void)
 
 		}
 		default:
+			print_debug("Default!\n");
 			read = 0;
 			__ASSERT_NO_MSG(0);
 			break;
@@ -208,6 +227,7 @@ static void rx_isr(void)
 
 static void tx_isr(void)
 {
+	print_debug("TX callback started");
 	static struct net_buf *buf;
 	int len;
 
@@ -234,7 +254,7 @@ static void bt_uart_isr(const struct device *unused, void *user_data)
 
 	if (!(uart_irq_rx_ready(hci_uart_dev) ||
 	      uart_irq_tx_ready(hci_uart_dev))) {
-		LOG_DBG("spurious interrupt");
+		print_debug("spurious interrupt");
 	}
 
 	if (uart_irq_tx_ready(hci_uart_dev)) {
@@ -257,7 +277,7 @@ static void tx_thread(void *p1, void *p2, void *p3)
 		/* Pass buffer to the stack */
 		err = bt_send(buf);
 		if (err) {
-			LOG_ERR("Unable to send (err %d)", err);
+			print_debug("Unable to send (err %d)", err);
 			net_buf_unref(buf);
 		}
 
@@ -270,7 +290,7 @@ static void tx_thread(void *p1, void *p2, void *p3)
 
 static int h4_send(struct net_buf *buf)
 {
-	LOG_DBG("buf %p type %u len %u", buf, bt_buf_get_type(buf),
+	print_debug("Sending buf %p type %u len %u\n", buf, bt_buf_get_type(buf),
 		    buf->len);
 
 	net_buf_put(&uart_tx_queue, buf);
@@ -328,17 +348,17 @@ void bt_ctlr_assert_handle(char *file, uint32_t line)
 
 static int hci_uart_init(void)
 {
-	LOG_DBG("");
+	print_debug("");
 
 	if (IS_ENABLED(CONFIG_USB_CDC_ACM)) {
 		if (usb_enable(NULL)) {
-			LOG_ERR("Failed to enable USB");
+			print_debug("Failed to enable USB");
 			return -EINVAL;
 		}
 	}
 
 	if (!device_is_ready(hci_uart_dev)) {
-		LOG_ERR("HCI UART %s is not ready", hci_uart_dev->name);
+		print_debug("HCI UART %s is not ready", hci_uart_dev->name);
 		return -EINVAL;
 	}
 
@@ -360,7 +380,7 @@ int main(void)
 	static K_FIFO_DEFINE(rx_queue);
 	int err;
 
-	LOG_DBG("Start");
+	print_debug("Start");
 	__ASSERT(hci_uart_dev, "UART device is NULL");
 
 	/* Enable the raw interface, this will in turn open the HCI driver */
@@ -406,7 +426,7 @@ int main(void)
 		buf = net_buf_get(&rx_queue, K_FOREVER);
 		err = h4_send(buf);
 		if (err) {
-			LOG_ERR("Failed to send");
+			print_debug("Failed to send");
 		}
 	}
 	return 0;
