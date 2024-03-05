@@ -8,6 +8,11 @@ Overview
 This package provides a raw Ble HCI Controller which can be accessed using a H4 UART connection which will be routed via the ``zephyr_console``. Hosts might be e.g. ``BlueZ``.
 This code was based on the zephyr ``_bluetooth-hci-uart-sample``
 
+Supported Ble features
+*********
+* BLE Central
+* Extended Advertisement Support (BLE 5.X)
+
 Compatible devices
 *********
 * `nRF52840 dongle <https://www.nordicsemi.com/Products/Development-hardware/nRF52840-Dongle>`_
@@ -24,8 +29,7 @@ Installation for Nordic
    * Hardware Flow Control (RTS/CTS) enabled
 * Connect via USB: You can find the dongle with the default vendorId and ``0x0004`` as productId
 
-
-Supported Ble features
+Building from Source
 *********
-* BLE Central
-* Extended Advertisement Support (BLE 5.X)
+* Install the nRF Connect SDK stack following the `offical documentation <https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/installation.html>`_
+* Use ``west build --build-dir build . --board nrf52840dongle_nrf52840`` to build for e.g. the nRF52840 dongle
