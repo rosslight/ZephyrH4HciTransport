@@ -27,8 +27,8 @@ jobs:
 
     - name: Zip files
       run: |
+        cp build/zephyr/zephyr.hex hci_transport_${{ steps.vars.outputs.tag }}.hex
         zip -r release.zip build/
-        mv build/zephyr/zephyr.hex build/zephyr/hci_transport_${{ steps.vars.outputs.tag }}.hex
 
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v2.2.2
@@ -39,4 +39,4 @@ jobs:
         prerelease: true
         files: |
           release.zip
-          build/zephyr/*.hex
+          hci_transport_*.hex
