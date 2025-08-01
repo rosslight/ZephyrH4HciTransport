@@ -1,0 +1,18 @@
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build
+      uses: embedd-actions/nrf-connect-sdk-ci@v3.0.1
+      with:
+        board: nrf52840dongle_nrf52840
+        build_dir: build
+    
+    - name: Cache build
+      uses: actions/cache@v3
+      with:
+        path: build
+        key: build-${{ github.sha }}
