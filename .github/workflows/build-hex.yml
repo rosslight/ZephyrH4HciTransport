@@ -12,7 +12,7 @@ jobs:
     - name: Build
       uses: embedd-actions/nrf-connect-sdk-ci@v3.0.1
       with:
-        board: nrf52820dongle
+        board: nrf52840dongle
         build_dir: build
     
     - name: Cache build
