@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	zephyr,user {
+		/* PCA10059 connects P0.19 to the physical reset line. */
+		dfu-reset-gpios = <&gpio0 19 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+	};
+};
