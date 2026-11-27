@@ -6,6 +6,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - uses: actions/checkout@v4
@@ -15,23 +17,16 @@ jobs:
       with:
         board: nrf52840dongle_nrf52840
         build_dir: build
-    
-    - name: Get version from tag
-      id: vars
-      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
 
     - name: Zip files
       run: |
-        cp build/zephyr/zephyr.hex hci_transport_${{ steps.vars.outputs.tag }}.hex
+        cp build/zephyr/zephyr.hex "hci_transport_${GITHUB_REF_NAME}.hex"
         zip -r release.zip build/
 
-    - name: Upload Release Assets
-      uses: softprops/action-gh-release@v2.2.2
+    - name: Publish prerelease
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        draft: false
-        prerelease: true
-        files: |
-          release.zip
-          hci_transport_*.hex
+        GH_TOKEN: ${{ github.token }}
+      # With assets, gh uploads to a draft before publishing and locking the release.
+      run: |
+        gh release create "$GITHUB_REF_NAME" release.zip "hci_transport_${GITHUB_REF_NAME}.hex" \
+          --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes ""
